@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voltbridge-mcp"
+version = "0.1.0"
+description = "Electrical and electronics telemetry and maintenance MCP server"
+requires-python = ">=3.11"
+dependencies = ["mcp>=1.30,<2", "httpx>=0.28,<1", "pydantic>=2.11,<3"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2"]
+
+[project.scripts]
+voltbridge-mcp = "electrical_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

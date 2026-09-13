@@ -1,0 +1,19 @@
+{
+  "company_id": "demo-factory",
+  "role": "maintenance",
+  "database": "electrical-mcp.db",
+  "devices": [
+    {
+      "id": "motor-3",
+      "name": "Simulated motor 3",
+      "connector": "simulator"
+    },
+    {
+      "id": "meter-1",
+      "name": "Local HTTP gateway demo",
+      "connector": "http",
+      "base_url": "http://127.0.0.1:8090",
+      "stale_after_seconds": 120
+    }
+  ]
+}
