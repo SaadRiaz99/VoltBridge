@@ -1,0 +1,69 @@
+VoltBridge Evaluation License 1.0
+
+Copyright (c) 2026 Saad Bin Riaz. All rights reserved except as expressly granted below.
+
+1. Scope
+These terms apply to the VoltBridge code and documentation in this repository
+(the "Software"), only to the extent that Saad Bin Riaz (the "Licensor") owns
+or controls the applicable rights. Separately licensed third-party components
+remain governed by their own licenses. These terms do not claim ownership of
+third-party code, public-domain material, general ideas or independently
+created implementations. This is a custom source-available evaluation license,
+not an open-source license.
+
+2. Evaluation permission
+Subject to these terms, the Licensor grants you a non-exclusive, worldwide,
+royalty-free permission to download, inspect, run and privately modify the
+Software solely for personal learning, research and internal non-production
+evaluation. Businesses may evaluate suitability in a test environment without
+paying a license fee. Internal copies may be shared with staff who need them
+for that evaluation and are informed of these terms. You may publish your
+own feedback, benchmark results and screenshots, provided you do not disclose
+confidential data or imply endorsement by the Licensor.
+
+3. Uses requiring separate written permission
+Except as allowed in section 2, section 4 or by applicable law, you may not:
+(a) use the Software in production or ongoing business operations;
+(b) sell, sublicense, commercially redistribute or offer the Software or
+    modified versions as a hosted service, paid integration or client deliverable;
+(c) incorporate the Software or modified versions into a distributed product;
+(d) distribute copies or modified versions to others.
+For these uses, obtain a separate written license from the Licensor before
+proceeding. Charging no fee does not by itself make a production deployment
+an evaluation. You may discuss proposed integrations and request a quote.
+
+4. GitHub and legal exceptions
+Nothing in these terms restricts viewing or forking rights granted under
+GitHub's applicable Terms of Service for this public repository. A GitHub fork
+does not grant additional production, resale or redistribution rights under
+this license. Nothing here restricts rights or exceptions that applicable law
+does not permit the Licensor to restrict, or withdraws rights separately and
+validly granted under another license.
+
+5. Notices and attribution
+Keep this license and applicable copyright and attribution notices in copies
+and modified versions. Identify your modifications and do not misrepresent
+yourself as the author of the original Software. No trademark rights or right
+to suggest endorsement by Saad Bin Riaz or VoltBridge are granted.
+
+6. Termination
+Permissions under this license terminate if you breach its conditions. On
+termination, stop activities relying on those permissions and delete copies
+held solely under them, subject to applicable law and the exceptions in
+section 4. A separate written agreement may provide additional terms.
+
+7. Warranty and liability
+The Software is provided "AS IS", without warranties of any kind, to the extent
+permitted by applicable law. The Licensor does not warrant fitness for a
+particular purpose, accuracy of telemetry, uninterrupted operation or safety
+of physical equipment. To the extent permitted by law, the Licensor is not
+liable for damages arising from use of the Software. Nothing in this section
+excludes liability that cannot lawfully be excluded. The Software is not a
+certified machine-safety or emergency-control system.
+
+8. Commercial inquiries
+Request commercial permission from Saad Bin Riaz through the VoltBridge
+repository: https://github.com/SaadRiaz99/VoltBridge/issues
+Do not post credentials, confidential equipment information or customer data
+in public issues. A request or unanswered message does not grant permission;
+commercial rights must be agreed in writing.

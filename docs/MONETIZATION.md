@@ -41,6 +41,6 @@ No customer outreach has been sent. Prepare your demo and choose real prospects 
 
 ## Product strategy
 
-Keep customer-specific credentials, data and integrations private. A public demonstration repository may help credibility after choosing a license and reviewing its contents. Potential paid additions include specific gateway adapters, approved ERP dispatch, installation, training, reporting and support. Select licensing deliberately before publishing; no commercial software license is supplied by this starter.
+Keep customer-specific credentials, data and integrations private. The public repository now uses the custom [VoltBridge Evaluation License](../LICENSE): learning and internal non-production evaluation are allowed, while production operation, resale and client deployments require separate written permission, subject to the license exceptions. This is source-available, not open source. Potential paid additions include specific gateway adapters, approved ERP dispatch, installation, training, reporting and support. Agree on commercial usage rights, deliverables and support scope in writing. Have the custom terms legally reviewed before relying on them for commercial agreements or enforcement.
 
 The next useful asset is access to one real device/API and a maintenance manager who can test the workflow. Build the next connector against that verified requirement.

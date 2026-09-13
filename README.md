@@ -1,5 +1,7 @@
 # VoltBridge MCP
 
+**Public source for evaluation:** free to inspect and test in non-production environments under the [VoltBridge Evaluation License](LICENSE). Production use, resale, hosted offerings and redistribution beyond the license exceptions require separate written permission.
+
 A working Python MCP server for electrical telemetry and maintenance workflows, created for Saad Bin Riaz. Version 0.1.0 is an advanced project foundation for a supervised pilot, not a certified factory-control system or complete SaaS.
 
 Ask an MCP-compatible AI client: **“Read Motor 3, compare its temperature with 45 degC, and prepare a maintenance draft if it is above that limit.”** No paid LLM API is required to run the server or client demo. Natural-language reasoning requires a separate MCP-compatible agent/client and model.
@@ -128,4 +130,21 @@ Keep physical protection and emergency interlocks in certified device/PLC system
 
 This project deliberately uses the supported MCP Python SDK v1 maintenance line (`mcp<2`) and its FastMCP API. SDK v2 has different APIs; do not remove the upper bound without migrating and rerunning the integration tests. See the [official v1 documentation](https://py.sdk.modelcontextprotocol.io/v1/) and [official SDK repository](https://github.com/modelcontextprotocol/python-sdk).
 
-Commercial licensing terms have not been selected. Decide which parts to license publicly and which customer integrations to keep private before public distribution. Do not assume dependency licenses grant rights to redistribute third-party customer systems or data.
+## License and commercial use
+
+VoltBridge uses the custom [VoltBridge Evaluation License 1.0](LICENSE). This is a source-available project, not an open-source-licensed project.
+
+| Use | Permission |
+|---|---|
+| Inspect, run the simulator, learn and privately modify for non-production evaluation | Allowed under LICENSE |
+| Internal business testing to assess suitability | Allowed under LICENSE |
+| Share feedback, your benchmark results and screenshots | Allowed subject to LICENSE |
+| View or fork on GitHub | GitHub's applicable terms still apply |
+| Production operation, resale, hosted service or client deployment | Separate written permission required |
+| Redistribute source or modified versions | Restricted, subject to LICENSE exceptions |
+
+Keep license and attribution notices. Third-party dependencies retain their own licenses. A public repository or GitHub fork does not give a blanket commercial-use license.
+
+**Need an integration or commercial license?** Open a [commercial inquiry](https://github.com/SaadRiaz99/VoltBridge/issues/new?title=Commercial%20inquiry) with a non-confidential description of the intended use. Do not post credentials or private customer information. Commercial terms and support scope must be agreed in writing.
+
+These custom terms define permissions; they do not technically prevent copying or guarantee enforcement. They have not been reviewed by a lawyer. Obtain qualified legal review before relying on them for commercial licensing or a dispute. For platform context, see [GitHub's licensing guidance](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/licensing-a-repository).
