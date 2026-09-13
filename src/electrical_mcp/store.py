@@ -20,6 +20,33 @@ class Store:
             CREATE TABLE IF NOT EXISTS audit (
               id INTEGER PRIMARY KEY, company TEXT, role TEXT, action TEXT,
               device TEXT, outcome TEXT, timestamp TEXT);
+            CREATE TABLE IF NOT EXISTS device_groups (
+              id INTEGER PRIMARY KEY, company TEXT, group_id TEXT,
+              name TEXT, description TEXT, parent_group_id TEXT,
+              device_ids TEXT, metadata TEXT, created_at TEXT,
+              UNIQUE(company, group_id));
+            CREATE TABLE IF NOT EXISTS scheduled_tasks (
+              id INTEGER PRIMARY KEY, company TEXT, task_id TEXT,
+              name TEXT, task_type TEXT, schedule_cron TEXT,
+              interval_seconds INTEGER, enabled INTEGER, config TEXT,
+              last_run TEXT, next_run TEXT, run_count INTEGER,
+              last_status TEXT, created_at TEXT,
+              UNIQUE(company, task_id));
+            CREATE TABLE IF NOT EXISTS alert_rules (
+              id INTEGER PRIMARY KEY, company TEXT, rule_id TEXT,
+              name TEXT, description TEXT, device_id TEXT,
+              metric TEXT, condition TEXT, threshold_value REAL,
+              threshold_value_upper REAL, severity TEXT, enabled INTEGER,
+              cooldown_seconds INTEGER, consecutive_breaches INTEGER,
+              notification_channels TEXT, tags TEXT,
+              UNIQUE(company, rule_id));
+            CREATE TABLE IF NOT EXISTS alerts (
+              id INTEGER PRIMARY KEY, company TEXT, alert_id TEXT,
+              rule_id TEXT, rule_name TEXT, device_id TEXT,
+              metric TEXT, severity TEXT, state TEXT, message TEXT,
+              current_value REAL, threshold_value REAL,
+              triggered_at TEXT, acknowledged_at TEXT, resolved_at TEXT,
+              acknowledged_by TEXT, metadata TEXT);
             """)
 
     @contextmanager
@@ -83,3 +110,116 @@ class Store:
                 ORDER BY timestamp DESC, id DESC LIMIT ?""",
                 (company, device, metric, start, end, limit)).fetchall()
         return [json.loads(r["payload"]) for r in rows]
+
+    def save_device_groups(self, company, groups):
+        with self.connect() as db:
+            db.execute("DELETE FROM device_groups WHERE company=?", (company,))
+            db.executemany("INSERT INTO device_groups VALUES (NULL,?,?,?,?,?,?,?,?)", [
+                (company, g["group_id"], g["name"], g.get("description", ""),
+                 g.get("parent_group_id"), json.dumps(g.get("device_ids", [])),
+                 json.dumps(g.get("metadata", {})), g.get("created_at", datetime.now(timezone.utc).isoformat()))
+                for g in groups])
+
+    def get_device_groups(self, company):
+        with self.connect() as db:
+            rows = db.execute("SELECT * FROM device_groups WHERE company=?", (company,)).fetchall()
+        result = []
+        for r in rows:
+            result.append({
+                "group_id": r["group_id"], "name": r["name"],
+                "description": r["description"], "parent_group_id": r["parent_group_id"],
+                "device_ids": json.loads(r["device_ids"]), "metadata": json.loads(r["metadata"]),
+                "created_at": r["created_at"],
+            })
+        return result
+
+    def save_scheduled_tasks(self, company, tasks):
+        with self.connect() as db:
+            db.execute("DELETE FROM scheduled_tasks WHERE company=?", (company,))
+            db.executemany("INSERT INTO scheduled_tasks VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?)", [
+                (company, t["task_id"], t["name"], t["task_type"], t.get("schedule_cron"),
+                 t.get("interval_seconds"), 1 if t.get("enabled", True) else 0,
+                 json.dumps(t.get("config", {})), t.get("last_run"), t.get("next_run"),
+                 t.get("run_count", 0), t.get("last_status", "pending"),
+                 t.get("created_at", datetime.now(timezone.utc).isoformat()))
+                for t in tasks])
+
+    def get_scheduled_tasks(self, company):
+        with self.connect() as db:
+            rows = db.execute("SELECT * FROM scheduled_tasks WHERE company=?", (company,)).fetchall()
+        result = []
+        for r in rows:
+            result.append({
+                "task_id": r["task_id"], "name": r["name"], "task_type": r["task_type"],
+                "schedule_cron": r["schedule_cron"], "interval_seconds": r["interval_seconds"],
+                "enabled": bool(r["enabled"]), "config": json.loads(r["config"]),
+                "last_run": r["last_run"], "next_run": r["next_run"],
+                "run_count": r["run_count"], "last_status": r["last_status"],
+                "created_at": r["created_at"],
+            })
+        return result
+
+    def save_alert_rules(self, company, rules):
+        with self.connect() as db:
+            db.execute("DELETE FROM alert_rules WHERE company=?", (company,))
+            db.executemany("INSERT INTO alert_rules VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
+                (company, r["rule_id"], r["name"], r.get("description", ""),
+                 r.get("device_id"), r["metric"], r["condition"],
+                 r.get("threshold_value"), r.get("threshold_value_upper"),
+                 r.get("severity", "warning"), 1 if r.get("enabled", True) else 0,
+                 r.get("cooldown_seconds", 300), r.get("consecutive_breaches", 1),
+                 json.dumps(r.get("notification_channels", [])),
+                 json.dumps(r.get("tags", {})))
+                for r in rules])
+
+    def get_alert_rules(self, company):
+        with self.connect() as db:
+            rows = db.execute("SELECT * FROM alert_rules WHERE company=?", (company,)).fetchall()
+        result = []
+        for r in rows:
+            result.append({
+                "rule_id": r["rule_id"], "name": r["name"], "description": r["description"],
+                "device_id": r["device_id"], "metric": r["metric"], "condition": r["condition"],
+                "threshold_value": r["threshold_value"], "threshold_value_upper": r["threshold_value_upper"],
+                "severity": r["severity"], "enabled": bool(r["enabled"]),
+                "cooldown_seconds": r["cooldown_seconds"],
+                "consecutive_breaches": r["consecutive_breaches"],
+                "notification_channels": json.loads(r["notification_channels"]),
+                "tags": json.loads(r["tags"]),
+            })
+        return result
+
+    def save_alert(self, company, alert):
+        with self.connect() as db:
+            db.execute("""INSERT INTO alerts VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
+                company, alert["alert_id"], alert["rule_id"], alert["rule_name"],
+                alert["device_id"], alert["metric"], alert["severity"],
+                alert["state"], alert["message"], alert["current_value"],
+                alert.get("threshold_value"), alert["triggered_at"],
+                alert.get("acknowledged_at"), alert.get("resolved_at"),
+                alert.get("acknowledged_by"), json.dumps(alert.get("metadata", {}))))
+
+    def get_alerts(self, company, state=None, limit=100):
+        with self.connect() as db:
+            if state:
+                rows = db.execute("SELECT * FROM alerts WHERE company=? AND state=? ORDER BY id DESC LIMIT ?",
+                                  (company, state, limit)).fetchall()
+            else:
+                rows = db.execute("SELECT * FROM alerts WHERE company=? ORDER BY id DESC LIMIT ?",
+                                  (company, limit)).fetchall()
+        result = []
+        for r in rows:
+            result.append({
+                "alert_id": r["alert_id"], "rule_id": r["rule_id"],
+                "rule_name": r["rule_name"], "device_id": r["device_id"],
+                "metric": r["metric"], "severity": r["severity"],
+                "state": r["state"], "message": r["message"],
+                "current_value": r["current_value"],
+                "threshold_value": r["threshold_value"],
+                "triggered_at": r["triggered_at"],
+                "acknowledged_at": r["acknowledged_at"],
+                "resolved_at": r["resolved_at"],
+                "acknowledged_by": r["acknowledged_by"],
+                "metadata": json.loads(r["metadata"]) if r["metadata"] else {},
+            })
+        return result
