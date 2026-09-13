@@ -14,6 +14,11 @@
       "connector": "http",
       "base_url": "http://127.0.0.1:8090",
       "stale_after_seconds": 120
+    },
+    {
+      "id": "motor-4",
+      "name": "Simulated motor 4",
+      "connector": "simulator"
     }
   ]
 }

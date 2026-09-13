@@ -1,4 +1,6 @@
+import asyncio
 import math
+from statistics import fmean
 from datetime import datetime, timezone
 from .connectors import SimulatorConnector, HttpConnector, DeviceUnavailable
 from .models import Settings, UNITS
@@ -110,3 +112,84 @@ class Operations:
             raise ValueError("Limit must be 1..100")
         self.record("get_audit_events")
         return self.store.audit_events(self.settings.company_id, limit)
+
+    async def fleet_health(self, limit=20):
+        if not 1 <= limit <= 50:
+            raise ValueError("Limit must be 1..50")
+        selected = sorted(self.devices)[:limit]
+        semaphore = asyncio.Semaphore(4)
+
+        async def check(device_id):
+            async with semaphore:
+                return await self.status(device_id)
+
+        devices = await asyncio.gather(*(check(device_id) for device_id in selected))
+        self.record("get_fleet_health")
+        return {"company_id": self.settings.company_id, "devices": devices,
+                "counts": {state: sum(d["status"] == state for d in devices)
+                           for state in ("online", "degraded", "unavailable")},
+                "checked": len(devices), "total_configured": len(self.devices),
+                "truncated": len(selected) < len(self.devices),
+                "note": "Gateway reachability and telemetry quality, not equipment safety or fault diagnosis"}
+
+    def measurement_statistics(self, device_id, metric, start, end, limit=500):
+        self.device(device_id)
+        if metric not in UNITS or not 1 <= limit <= 500:
+            raise ValueError("Use a supported metric and limit 1..500")
+        dates = [datetime.fromisoformat(t.replace("Z", "+00:00")) for t in (start, end)]
+        if any(d.tzinfo is None for d in dates) or dates[0] > dates[1]:
+            raise ValueError("Use timezone-aware ordered dates")
+        rows = self.store.metric_history(self.settings.company_id, device_id, metric,
+            *(d.astimezone(timezone.utc).isoformat() for d in dates), limit + 1)
+        selected = rows[:limit]
+        usable = [r for r in selected if r.get("usable") and r["unit"] == UNITS[metric]]
+        groups = {}
+        for label, simulated in (("simulated", True), ("non_simulated", False)):
+            samples = [r for r in usable if bool(r.get("simulated")) == simulated]
+            values = [r["value"] for r in samples]
+            groups[label] = {"count": len(values), "minimum": min(values) if values else None,
+                "maximum": max(values) if values else None, "mean": fmean(values) if values else None,
+                "oldest_timestamp": samples[-1]["timestamp"] if samples else None,
+                "newest_timestamp": samples[0]["timestamp"] if samples else None}
+        self.record("get_measurement_statistics", device_id)
+        return {"device_id": device_id, "metric": metric, "unit": UNITS[metric],
+                "sample_count": len(selected), "excluded_count": len(selected) - len(usable),
+                "truncated": len(rows) > limit, "groups": groups,
+                "note": "Newest matching stored samples; quality is evaluated at collection time. "
+                        "Arithmetic sample mean, not a time-weighted average or energy-consumption calculation."}
+
+    async def compare_devices(self, first_device_id, second_device_id, metric):
+        if metric not in UNITS or first_device_id == second_device_id:
+            raise ValueError("Use a supported metric and two different devices")
+        # Validate both before any gateway access.
+        self.device(first_device_id)
+        self.device(second_device_id)
+
+        async def sample(device_id):
+            try:
+                data = await self.read(device_id)
+                reading = next((r for r in data["readings"] if r["metric"] == metric), None)
+                if reading is None:
+                    return {"device_id": device_id, "status": "metric_missing", "reading": None}
+                valid = reading["usable"] and reading["unit"] == UNITS[metric]
+                return {"device_id": device_id, "status": "usable" if valid else "unusable", "reading": reading}
+            except DeviceUnavailable:
+                return {"device_id": device_id, "status": "unavailable", "reading": None}
+
+        samples = await asyncio.gather(sample(first_device_id), sample(second_device_id))
+        comparable = all(s["status"] == "usable" for s in samples)
+        reason = None if comparable else "A device is unavailable, missing the metric or has unusable telemetry"
+        skew = None
+        if comparable:
+            a, b = (s["reading"] for s in samples)
+            skew = abs((datetime.fromisoformat(a["timestamp"]) - datetime.fromisoformat(b["timestamp"])).total_seconds())
+            if a["simulated"] != b["simulated"]:
+                comparable, reason = False, "Simulated and non-simulated readings cannot be compared"
+            elif skew > 5:
+                comparable, reason = False, "Acquisition timestamps differ by more than five seconds"
+        difference = samples[0]["reading"]["value"] - samples[1]["reading"]["value"] if comparable else None
+        self.record("compare_device_measurements")
+        return {"metric": metric, "unit": UNITS[metric], "samples": samples,
+                "comparable": comparable, "reason": reason, "timestamp_skew_seconds": skew,
+                "difference_first_minus_second": difference,
+                "note": "Difference only; equipment suitability and operating limits require engineering context"}

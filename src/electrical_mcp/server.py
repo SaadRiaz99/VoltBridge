@@ -70,6 +70,21 @@ def build_server(settings=None):
         """Inspect recent operational events; admin role required."""
         return ops.audit(limit)
 
+    @mcp.tool(annotations=read)
+    async def get_fleet_health(limit: int = 20) -> dict:
+        """Check up to 50 configured devices, four at a time, reporting offline/degraded gateways."""
+        return await ops.fleet_health(limit)
+
+    @mcp.tool(annotations=read)
+    def get_measurement_statistics(device_id: str, metric: str, start: str, end: str, limit: int = 500) -> dict:
+        """Summarize newest stored metric samples in an ISO date range; separate simulated data."""
+        return ops.measurement_statistics(device_id, metric, start, end, limit)
+
+    @mcp.tool(annotations=read)
+    async def compare_device_measurements(first_device_id: str, second_device_id: str, metric: str) -> dict:
+        """Compare two readings only when quality, units, simulation flags and timestamps agree."""
+        return await ops.compare_devices(first_device_id, second_device_id, metric)
+
     @mcp.resource("electrical://devices")
     def device_inventory() -> str:
         return json.dumps(ops.list_devices())

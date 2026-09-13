@@ -1,8 +1,10 @@
 # Development roadmap
 
-## Delivered: v0.1 local integration foundation
+## Delivered: v0.2 local integration foundation
 
 Simulator, HTTP gateway reads, typed MCP tools/resources/prompt, local process roles, company-scoped SQLite records, telemetry quality checks, threshold comparisons, maintenance draft idempotency, audit records, examples and tests.
+
+v0.2 adds fleet telemetry status, bounded historical statistics and quality-aware comparisons for a total of 12 MCP tools. These preserve company scoping and simulation labels.
 
 ## Stage 1: one real device pilot
 

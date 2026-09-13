@@ -75,3 +75,11 @@ class Store:
             rows = db.execute("SELECT * FROM audit WHERE company=? ORDER BY id DESC LIMIT ?",
                               (company, limit)).fetchall()
         return [dict(r) for r in rows]
+
+    def metric_history(self, company, device, metric, start, end, limit):
+        with self.connect() as db:
+            rows = db.execute("""SELECT payload FROM readings
+                WHERE company=? AND device=? AND metric=? AND timestamp>=? AND timestamp<=?
+                ORDER BY timestamp DESC, id DESC LIMIT ?""",
+                (company, device, metric, start, end, limit)).fetchall()
+        return [json.loads(r["payload"]) for r in rows]

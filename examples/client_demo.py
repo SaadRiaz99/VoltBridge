@@ -1,11 +1,12 @@
 """Connect to the actual MCP stdio transport; no LLM API key required."""
 import asyncio
+import os
 import sys
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 async def main():
-    params = StdioServerParameters(command=sys.executable, args=["-m", "electrical_mcp.server"])
+    params = StdioServerParameters(command=sys.executable, args=["-m", "electrical_mcp.server"], env=dict(os.environ))
     async with stdio_client(params) as (reader, writer):
         async with ClientSession(reader, writer) as session:
             await session.initialize()
@@ -13,6 +14,8 @@ async def main():
             print("Tools:", [tool.name for tool in inventory.tools])
             for name, args in [
                 ("read_measurements", {"device_id": "motor-3"}),
+                ("get_fleet_health", {}),
+                ("get_measurement_statistics", {"device_id": "motor-3", "metric": "temperature", "start": "2020-01-01T00:00:00Z", "end": "2100-01-01T00:00:00Z"}),
                 ("check_threshold", {"device_id": "motor-3", "metric": "temperature", "maximum": 45, "unit": "degC"}),
                 ("create_maintenance_request_draft", {"device_id": "motor-3", "issue": "Demo: inspect temperature above configured limit", "idempotency_key": "demo-motor-3-inspection"})
             ]:

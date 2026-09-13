@@ -2,13 +2,13 @@
 
 **Public source for evaluation:** free to inspect and test in non-production environments under the [VoltBridge Evaluation License](LICENSE). Production use, resale, hosted offerings and redistribution beyond the license exceptions require separate written permission.
 
-A working Python MCP server for electrical telemetry and maintenance workflows, created for Saad Bin Riaz. Version 0.1.0 is an advanced project foundation for a supervised pilot, not a certified factory-control system or complete SaaS.
+A working Python MCP server for electrical telemetry and maintenance workflows, created for Saad Bin Riaz. Version 0.2.0 is an advanced project foundation for a supervised pilot, not a certified factory-control system or complete SaaS.
 
 Ask an MCP-compatible AI client: **“Read Motor 3, compare its temperature with 45 degC, and prepare a maintenance draft if it is above that limit.”** No paid LLM API is required to run the server or client demo. Natural-language reasoning requires a separate MCP-compatible agent/client and model.
 
 ## What works
 
-- Nine typed MCP tools, two resources and one investigation prompt over local stdio.
+- Twelve typed MCP tools, two resources and one investigation prompt over local stdio.
 - Deterministic simulated motor telemetry and a real HTTP connector for gateways implementing the documented JSON contract.
 - Voltage, current, power, cumulative energy and temperature with units, UTC timestamps, quality and simulation labels.
 - Stale/future timestamp detection; unusable readings cannot pass a threshold check.
@@ -37,7 +37,7 @@ py -3.12 -m venv .venv
 
 Python 3.11+ is declared; use Python 3.12 for the locally verified environment. If the `py` launcher is unavailable, use `python -m venv .venv`. Activation is optional because these commands address the environment directly.
 
-The demo launches the server, discovers nine tools, reads simulated Motor 3, checks 48 degC against a 45 degC demo threshold, and stores a local draft. Re-running it reuses the same draft. These are illustrative readings and thresholds, not operating specifications.
+The demo launches the server, discovers twelve tools, reads simulated Motor 3, checks 48 degC against a 45 degC demo threshold, and stores a local draft. Re-running it reuses the same draft. These are illustrative readings and thresholds, not operating specifications.
 
 Start the server for an MCP host:
 
@@ -97,11 +97,30 @@ For live equipment, replace the configured endpoint with your operator-managed H
 | `create_maintenance_request_draft` | Retry-safe local draft | Maintenance/admin |
 | `list_maintenance_drafts` | Local drafts for current company | Maintenance/admin |
 | `get_audit_events` | Recent operation outcomes | Admin |
+| `get_fleet_health` | Bounded fleet reachability and telemetry-quality overview | All |
+| `get_measurement_statistics` | Per-metric minimum, maximum and sample mean | All |
+| `compare_device_measurements` | Quality-checked comparison of two device readings | All |
 
 Resources: `electrical://devices`, `electrical://integration-guide`.
 Prompt: `investigate_device(device_id)`.
 
 Reading tools are read-only with respect to devices, while storing local telemetry/audit records. Drafts never send emails, dispatch technicians, or modify an ERP.
+
+## New in v0.2: fleet and measurement analysis
+
+- `get_fleet_health(limit=20)` checks configured devices in ID order, at most four concurrently. The maximum limit is 50; `truncated` indicates unchecked devices. A failed gateway appears as unavailable while other checks continue. This is an on-demand telemetry overview, not continuous monitoring or machinery health certification.
+- `get_measurement_statistics(device_id, metric, start, end, limit=500)` reports the newest matching stored samples in the requested timezone-aware ISO date range. Unusable-at-collection samples are excluded and counted. Simulated and non-simulated statistics are separate; empty groups return null statistics. Results disclose truncation. The mean is an arithmetic sample mean, not time-weighted or an energy-consumption calculation.
+- `compare_device_measurements(first_device_id, second_device_id, metric)` reads two distinct configured devices. A numeric difference is returned only for usable, matching-unit readings with matching simulation flags and acquisition timestamps within five seconds. Offline, missing or mismatched data returns a reason and a null difference. This does not establish whether different machines should have the same readings.
+
+Example MCP tool arguments (configure `examples/devices.json` for both simulated motors):
+
+```json
+{"name":"get_fleet_health","arguments":{"limit":20}}
+{"name":"get_measurement_statistics","arguments":{"device_id":"motor-3","metric":"temperature","start":"2026-01-01T00:00:00Z","end":"2026-12-31T23:59:59Z"}}
+{"name":"compare_device_measurements","arguments":{"first_device_id":"motor-3","second_device_id":"motor-4","metric":"power"}}
+```
+
+Each line is a separate illustrative tool call. Statistics require previously collected samples; the server does not backfill history.
 
 ## Boundaries before customer deployment
 
