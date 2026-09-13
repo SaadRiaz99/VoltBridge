@@ -4,13 +4,28 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voltbridge-mcp"
-version = "0.2.0"
-description = "Electrical and electronics telemetry and maintenance MCP server"
+version = "0.3.0"
+description = "Advanced electrical telemetry and maintenance MCP server with real-time monitoring, analytics, and alerting"
 requires-python = ">=3.11"
-dependencies = ["mcp>=1.30,<2", "httpx>=0.28,<1", "pydantic>=2.11,<3"]
+dependencies = [
+    "mcp>=1.30,<2",
+    "httpx>=0.28,<1",
+    "pydantic>=2.11,<3",
+    "numpy>=1.24,<3",
+    "pandas>=2.0,<3",
+    "websockets>=12.0,<14",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10", "pytest-asyncio>=1,<2"]
+mqtt = ["paho-mqtt>=2.0,<3"]
+parquet = ["pyarrow>=14.0,<17"]
+chart = ["matplotlib>=3.8,<4"]
+dev = [
+    "pytest>=8,<10",
+    "pytest-asyncio>=1,<2",
+    "pytest-cov>=5,<7",
+    "ruff>=0.4,<1",
+]
 
 [project.scripts]
 voltbridge-mcp = "electrical_mcp.server:main"
@@ -21,3 +36,11 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM"]
+ignore = ["E501"]
