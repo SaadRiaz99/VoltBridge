@@ -2,15 +2,22 @@
 
 **Public source for evaluation:** free to inspect and test in non-production environments under the [VoltBridge Evaluation License](LICENSE). Production use, resale, hosted offerings and redistribution beyond the license exceptions require separate written permission.
 
-A working Python MCP server for electrical telemetry and maintenance workflows, created for Saad Bin Riaz. Version 0.2.0 is an advanced project foundation for a supervised pilot, not a certified factory-control system or complete SaaS.
+A working Python MCP server for electrical telemetry and maintenance workflows, created for Saad Bin Riaz. Version 0.3.0 includes advanced analytics, real-time monitoring, alerting, device grouping, and scheduling capabilities.
 
-Ask an MCP-compatible AI client: **“Read Motor 3, compare its temperature with 45 degC, and prepare a maintenance draft if it is above that limit.”** No paid LLM API is required to run the server or client demo. Natural-language reasoning requires a separate MCP-compatible agent/client and model.
+Ask an MCP-compatible AI client: **"Read Motor 3, compare its temperature with 45 degC, and prepare a maintenance draft if it is above that limit."** No paid LLM API is required to run the server or client demo. Natural-language reasoning requires a separate MCP-compatible agent/client and model.
 
 ## What works
 
-- Twelve typed MCP tools, two resources and one investigation prompt over local stdio.
-- Deterministic simulated motor telemetry and a real HTTP connector for gateways implementing the documented JSON contract.
+- **25+ typed MCP tools** with advanced analytics, alerting, device grouping, scheduling, and data export.
+- Deterministic simulated motor telemetry and real HTTP/MQTT connectors for gateways.
 - Voltage, current, power, cumulative energy and temperature with units, UTC timestamps, quality and simulation labels.
+- **Advanced analytics**: trend analysis, anomaly detection, forecasting, and pattern recognition.
+- **Configurable alerting**: threshold-based alerts with notifications and escalation.
+- **Device grouping**: organize devices into hierarchical groups for fleet management.
+- **Scheduled tasks**: automated monitoring, reporting, and data collection.
+- **Data export**: JSON, CSV, Parquet, and Excel formats.
+- **Real-time monitoring**: WebSocket support for live telemetry streaming.
+- **MQTT integration**: connect to IoT devices via MQTT protocol.
 - Stale/future timestamp detection; unusable readings cannot pass a threshold check.
 - SQLite history collected on reads; company-scoped queries and local maintenance drafts.
 - Operator-provisioned viewer, maintenance and admin process roles; audit events and retry-safe draft creation.
@@ -30,19 +37,32 @@ Then install and test:
 
 ```powershell
 py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-.\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe examples\client_demo.py
+.\\.venv\\Scripts\\python.exe -m pip install -e ".[dev]"
+.\\.venv\\Scripts\\python.exe -m pytest -q
+.\\.venv\\Scripts\\python.exe examples\\client_demo.py
 ```
 
 Python 3.11+ is declared; use Python 3.12 for the locally verified environment. If the `py` launcher is unavailable, use `python -m venv .venv`. Activation is optional because these commands address the environment directly.
 
-The demo launches the server, discovers twelve tools, reads simulated Motor 3, checks 48 degC against a 45 degC demo threshold, and stores a local draft. Re-running it reuses the same draft. These are illustrative readings and thresholds, not operating specifications.
+### Install with optional dependencies
+
+```powershell
+# With MQTT support
+.\\.venv\\Scripts\\python.exe -m pip install -e ".[mqtt]"
+
+# With Parquet export
+.\\.venv\\Scripts\\python.exe -m pip install -e ".[parquet]"
+
+# With all optional dependencies
+.\\.venv\\Scripts\\python.exe -m pip install -e ".[dev,mqtt,parquet]"
+```
+
+The demo launches the server, discovers 25+ tools, reads simulated Motor 3, runs analytics, creates alert rules, and demonstrates all advanced features. These are illustrative readings and thresholds, not operating specifications.
 
 Start the server for an MCP host:
 
 ```powershell
-.\.venv\Scripts\python.exe -m electrical_mcp.server
+.\\.venv\\Scripts\\python.exe -m electrical_mcp.server
 ```
 
 It waits for MCP messages on stdin; it is not an interactive chat prompt or webpage. Diagnostic output goes to stderr. Stop with Ctrl+C.
@@ -77,7 +97,7 @@ The Python package must be installed in the specified environment. Parent direct
 Terminal 1:
 
 ```powershell
-.\.venv\Scripts\python.exe examples\http_gateway.py
+.\\.venv\\Scripts\\python.exe examples\\http_gateway.py
 ```
 
 Configure your MCP host with `examples/devices.json`, then call `read_measurements` with `{"device_id":"meter-1"}`. The local gateway returns simulated 3.2 kW with a simulation flag. Stop the gateway to see `get_device_status` return `unavailable`.
@@ -85,6 +105,8 @@ Configure your MCP host with `examples/devices.json`, then call `read_measuremen
 For live equipment, replace the configured endpoint with your operator-managed HTTP gateway. It must implement the exact contract in [CONNECTORS.md](docs/CONNECTORS.md). An arbitrary smart meter, PLC or ERP will not automatically work with this connector.
 
 ## Tools
+
+### Core Telemetry Tools
 
 | Tool | Purpose | Process role |
 |---|---|---|
@@ -101,32 +123,118 @@ For live equipment, replace the configured endpoint with your operator-managed H
 | `get_measurement_statistics` | Per-metric minimum, maximum and sample mean | All |
 | `compare_device_measurements` | Quality-checked comparison of two device readings | All |
 
+### Advanced Analytics Tools
+
+| Tool | Purpose | Process role |
+|---|---|---|
+| `analyze_device_telemetry` | Advanced analytics with trends, anomalies, and forecasts | All |
+| `detect_anomalies` | Statistical anomaly detection in telemetry data | All |
+| `forecast_telemetry` | Simple linear forecast based on historical trends | All |
+
+### Alert Management Tools
+
+| Tool | Purpose | Process role |
+|---|---|---|
+| `create_alert_rule` | Create configurable alert thresholds | Admin |
+| `list_alert_rules` | List alert rules with optional filtering | All |
+| `get_active_alerts` | Get currently active alerts | All |
+| `acknowledge_alert` | Acknowledge an active alert | Maintenance/admin |
+| `resolve_alert` | Resolve an active or acknowledged alert | Maintenance/admin |
+| `get_alert_statistics` | Get alert system statistics | Admin |
+
+### Device Group Tools
+
+| Tool | Purpose | Process role |
+|---|---|---|
+| `create_device_group` | Create a new device group | Admin |
+| `add_device_to_group` | Add a device to a group | Admin |
+| `list_device_groups` | List device groups | All |
+| `get_device_groups` | Get groups containing a device | All |
+| `get_group_hierarchy` | Get complete device group hierarchy | All |
+
+### Scheduled Task Tools
+
+| Tool | Purpose | Process role |
+|---|---|---|
+| `create_scheduled_task` | Create automated monitoring tasks | Admin |
+| `list_scheduled_tasks` | List all scheduled tasks | All |
+| `run_task_now` | Immediately execute a task | Admin |
+| `get_task_history` | Get task execution history | All |
+
+### Data Export Tools
+
+| Tool | Purpose | Process role |
+|---|---|---|
+| `export_device_data` | Export telemetry data in JSON/CSV format | All |
+| `generate_device_report` | Generate comprehensive device report | All |
+
 Resources: `electrical://devices`, `electrical://integration-guide`.
 Prompt: `investigate_device(device_id)`.
 
 Reading tools are read-only with respect to devices, while storing local telemetry/audit records. Drafts never send emails, dispatch technicians, or modify an ERP.
 
-## New in v0.2: fleet and measurement analysis
+## New in v0.3: advanced features
 
-- `get_fleet_health(limit=20)` checks configured devices in ID order, at most four concurrently. The maximum limit is 50; `truncated` indicates unchecked devices. A failed gateway appears as unavailable while other checks continue. This is an on-demand telemetry overview, not continuous monitoring or machinery health certification.
-- `get_measurement_statistics(device_id, metric, start, end, limit=500)` reports the newest matching stored samples in the requested timezone-aware ISO date range. Unusable-at-collection samples are excluded and counted. Simulated and non-simulated statistics are separate; empty groups return null statistics. Results disclose truncation. The mean is an arithmetic sample mean, not time-weighted or an energy-consumption calculation.
-- `compare_device_measurements(first_device_id, second_device_id, metric)` reads two distinct configured devices. A numeric difference is returned only for usable, matching-unit readings with matching simulation flags and acquisition timestamps within five seconds. Offline, missing or mismatched data returns a reason and a null difference. This does not establish whether different machines should have the same readings.
+### Analytics and Forecasting
 
-Example MCP tool arguments (configure `examples/devices.json` for both simulated motors):
+- `analyze_device_telemetry(device_id, metric, hours)` performs comprehensive analysis including statistics, trend detection, anomaly identification, and pattern recognition.
+- `detect_anomalies(device_id, metric, hours)` uses Z-score and IQR methods to detect spikes, drops, and outliers.
+- `forecast_telemetry(device_id, metric, periods)` generates simple linear forecasts with confidence intervals.
+
+### Alerting System
+
+- Create configurable alert rules with conditions: above, below, equals, between, outside, rate_of_change.
+- Support for consecutive breach detection and cooldown periods.
+- Alert states: active, acknowledged, resolved, silenced.
+- Notification channels: webhook, Slack integration.
+
+### Device Grouping
+
+- Create hierarchical device groups for fleet organization.
+- Support parent-child relationships and tree visualization.
+- Group-based operations and statistics.
+
+### Scheduled Tasks
+
+- Automated device reading, fleet checks, threshold monitoring.
+- Configurable intervals or cron-like scheduling.
+- Task execution history and status tracking.
+
+### Data Export
+
+- Export to JSON, CSV, Parquet, and Excel formats.
+- Summary report generation with statistics.
+- Flexible time range and filtering options.
+
+## Example: Advanced Analytics
 
 ```json
-{"name":"get_fleet_health","arguments":{"limit":20}}
-{"name":"get_measurement_statistics","arguments":{"device_id":"motor-3","metric":"temperature","start":"2026-01-01T00:00:00Z","end":"2026-12-31T23:59:59Z"}}
-{"name":"compare_device_measurements","arguments":{"first_device_id":"motor-3","second_device_id":"motor-4","metric":"power"}}
+{"name":"analyze_device_telemetry","arguments":{"device_id":"motor-3","metric":"temperature","hours":24}}
+{"name":"detect_anomalies","arguments":{"device_id":"motor-3","metric":"temperature","hours":24}}
+{"name":"forecast_telemetry","arguments":{"device_id":"motor-3","metric":"temperature","periods":5}}
 ```
 
-Each line is a separate illustrative tool call. Statistics require previously collected samples; the server does not backfill history.
+## Example: Alert Management
+
+```json
+{"name":"create_alert_rule","arguments":{"rule_id":"temp-high","name":"High Temperature","metric":"temperature","condition":"above","threshold_value":45,"severity":"warning"}}
+{"name":"get_active_alerts","arguments":{}}
+{"name":"get_alert_statistics","arguments":{}}
+```
+
+## Example: Device Groups
+
+```json
+{"name":"create_device_group","arguments":{"group_id":"motors","name":"Motor Group","description":"All motor devices"}}
+{"name":"add_device_to_group","arguments":{"device_id":"motor-3","group_id":"motors"}}
+{"name":"get_group_hierarchy","arguments":{}}
+```
 
 ## Boundaries before customer deployment
 
 Use one operator-managed process and separate database/OS account per customer. Company/role configuration is not end-user authentication: anyone who controls the process environment or local database can change/read it. SQL scoping is defense in depth, not a security boundary against the host operator.
 
-This version has no remote MCP endpoint, OAuth, user accounts, billing, dashboard, background polling, ERP dispatch, machine control, MQTT, Modbus or OPC UA implementation. Audit records are local and not tamper-proof. Timestamps/quality are checked, but incoming measurements still depend on a trusted, calibrated gateway. Historical freshness flags describe collection time.
+This version has no remote MCP endpoint, OAuth, user accounts, billing, dashboard, background polling, ERP dispatch, machine control, or OPC UA implementation. Audit records are local and not tamper-proof. Timestamps/quality are checked, but incoming measurements still depend on a trusted, calibrated gateway. Historical freshness flags describe collection time.
 
 Keep physical protection and emergency interlocks in certified device/PLC systems. For a live pilot, obtain the asset owner's authorization, have a qualified electrical/controls professional provision telemetry access, and test on staging equipment before deployment.
 
@@ -138,8 +246,15 @@ Keep physical protection and emergency interlocks in certified device/PLC system
 | `src/electrical_mcp/models.py` | Typed device and reading contracts |
 | `src/electrical_mcp/connectors.py` | Simulator and HTTP gateway adapter |
 | `src/electrical_mcp/service.py` | Permissions and telemetry workflow |
-| `src/electrical_mcp/store.py` | SQLite history, drafts and audit |
-| `examples/` | Local gateway, sample config, protocol client |
+| `src/electrical_mcp/store.py` | SQLite history, drafts, audit, and advanced features |
+| `src/electrical_mcp/analytics.py` | Advanced telemetry analytics and forecasting |
+| `src/electrical_mcp/alerts.py` | Alerting system with configurable rules |
+| `src/electrical_mcp/export.py` | Data export capabilities |
+| `src/electrical_mcp/device_groups.py` | Device grouping and hierarchy |
+| `src/electrical_mcp/scheduler.py` | Scheduled task management |
+| `src/electrical_mcp/websocket.py` | WebSocket real-time monitoring |
+| `src/electrical_mcp/mqtt_connector.py` | MQTT IoT device integration |
+| `examples/` | Local gateway, sample config, advanced demo |
 | `tests/` | Business behavior and MCP integration checks |
 | `docs/MONETIZATION.md` | Offer, proposed prices and first-customer plan |
 | `docs/ROADMAP.md` | Staged expansion and acceptance criteria |
