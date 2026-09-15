@@ -14,12 +14,16 @@ class Store:
               timestamp TEXT, payload TEXT);
             CREATE INDEX IF NOT EXISTS readings_lookup
               ON readings(company, device, timestamp);
+            CREATE INDEX IF NOT EXISTS readings_metric_lookup
+              ON readings(company, device, metric, timestamp DESC, id DESC);
             CREATE TABLE IF NOT EXISTS drafts (
               id TEXT PRIMARY KEY, company TEXT, key TEXT, device TEXT,
               issue TEXT, created_at TEXT, UNIQUE(company, key));
             CREATE TABLE IF NOT EXISTS audit (
               id INTEGER PRIMARY KEY, company TEXT, role TEXT, action TEXT,
               device TEXT, outcome TEXT, timestamp TEXT);
+            CREATE INDEX IF NOT EXISTS audit_company_lookup ON audit(company, id DESC);
+            CREATE INDEX IF NOT EXISTS drafts_company_lookup ON drafts(company, created_at DESC);
             CREATE TABLE IF NOT EXISTS device_groups (
               id INTEGER PRIMARY KEY, company TEXT, group_id TEXT,
               name TEXT, description TEXT, parent_group_id TEXT,
@@ -136,7 +140,7 @@ class Store:
     def save_scheduled_tasks(self, company, tasks):
         with self.connect() as db:
             db.execute("DELETE FROM scheduled_tasks WHERE company=?", (company,))
-            db.executemany("INSERT INTO scheduled_tasks VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?)", [
+            db.executemany("INSERT INTO scheduled_tasks VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?)", [
                 (company, t["task_id"], t["name"], t["task_type"], t.get("schedule_cron"),
                  t.get("interval_seconds"), 1 if t.get("enabled", True) else 0,
                  json.dumps(t.get("config", {})), t.get("last_run"), t.get("next_run"),
@@ -191,6 +195,7 @@ class Store:
 
     def save_alert(self, company, alert):
         with self.connect() as db:
+            db.execute("DELETE FROM alerts WHERE company=? AND alert_id=?", (company, alert["alert_id"]))
             db.execute("""INSERT INTO alerts VALUES (NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
                 company, alert["alert_id"], alert["rule_id"], alert["rule_name"],
                 alert["device_id"], alert["metric"], alert["severity"],
@@ -223,3 +228,17 @@ class Store:
                 "metadata": json.loads(r["metadata"]) if r["metadata"] else {},
             })
         return result
+
+    def latest_readings(self, company, device, metrics):
+        # One indexed seek per supported metric; never scan all device history.
+        with self.connect() as db:
+            rows = [db.execute("""SELECT payload FROM readings
+                WHERE company=? AND device=? AND metric=?
+                ORDER BY timestamp DESC, id DESC LIMIT 1""", (company, device, metric)).fetchone()
+                for metric in metrics]
+        return [json.loads(r["payload"]) for r in rows if r is not None]
+
+    def get_draft(self, company, draft_id):
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM drafts WHERE company=? AND id=?", (company, draft_id)).fetchone()
+        return {**dict(row), "status": "draft", "sent_to_external_system": False} if row else None

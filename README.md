@@ -2,22 +2,22 @@
 
 **Public source for evaluation:** free to inspect and test in non-production environments under the [VoltBridge Evaluation License](LICENSE). Production use, resale, hosted offerings and redistribution beyond the license exceptions require separate written permission.
 
-A working Python MCP server for electrical telemetry and maintenance workflows, created for Saad Bin Riaz. Version 0.3.0 includes advanced analytics, real-time monitoring, alerting, device grouping, and scheduling capabilities.
+A working Python MCP server for electrical telemetry and maintenance workflows, created for Saad Bin Riaz. Version 0.4.0 exposes 36 MCP tools for telemetry, analytics, explicit alert evaluation, device groups and maintenance workflows. It is a prototype for supervised evaluation.
 
 Ask an MCP-compatible AI client: **"Read Motor 3, compare its temperature with 45 degC, and prepare a maintenance draft if it is above that limit."** No paid LLM API is required to run the server or client demo. Natural-language reasoning requires a separate MCP-compatible agent/client and model.
 
 ## What works
 
-- **25+ typed MCP tools** with advanced analytics, alerting, device grouping, scheduling, and data export.
-- Deterministic simulated motor telemetry and real HTTP/MQTT connectors for gateways.
+- **36 typed MCP tools** with advanced analytics, alerting, device grouping, scheduling, and data export.
+- Deterministic simulator and HTTP gateway connector in the MCP server. The separate MQTT module is experimental and not wired into device configuration.
 - Voltage, current, power, cumulative energy and temperature with units, UTC timestamps, quality and simulation labels.
 - **Advanced analytics**: trend analysis, anomaly detection, forecasting, and pattern recognition.
-- **Configurable alerting**: threshold-based alerts with notifications and escalation.
+- **Configurable alerting**: explicit threshold evaluation with persisted rules and alerts. No notifications are sent by MCP tools.
 - **Device grouping**: organize devices into hierarchical groups for fleet management.
-- **Scheduled tasks**: automated monitoring, reporting, and data collection.
-- **Data export**: JSON, CSV, Parquet, and Excel formats.
-- **Real-time monitoring**: WebSocket support for live telemetry streaming.
-- **MQTT integration**: connect to IoT devices via MQTT protocol.
+- **Task definitions**: persisted interval configuration and manual execution for device reads, fleet checks and thresholds.
+- **Data export**: JSON and CSV through MCP; additional module formats require separate setup.
+- **Experimental modules**: WebSocket helpers are present but not served by the MCP entry point.
+- **MQTT module**: requires the optional dependency and separate integration/hardware validation.
 - Stale/future timestamp detection; unusable readings cannot pass a threshold check.
 - SQLite history collected on reads; company-scoped queries and local maintenance drafts.
 - Operator-provisioned viewer, maintenance and admin process roles; audit events and retry-safe draft creation.
@@ -37,9 +37,9 @@ Then install and test:
 
 ```powershell
 py -3.12 -m venv .venv
-.\\.venv\\Scripts\\python.exe -m pip install -e ".[dev]"
-.\\.venv\\Scripts\\python.exe -m pytest -q
-.\\.venv\\Scripts\\python.exe examples\\client_demo.py
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe examples\client_demo.py
 ```
 
 Python 3.11+ is declared; use Python 3.12 for the locally verified environment. If the `py` launcher is unavailable, use `python -m venv .venv`. Activation is optional because these commands address the environment directly.
@@ -48,21 +48,21 @@ Python 3.11+ is declared; use Python 3.12 for the locally verified environment. 
 
 ```powershell
 # With MQTT support
-.\\.venv\\Scripts\\python.exe -m pip install -e ".[mqtt]"
+.\.venv\Scripts\python.exe -m pip install -e ".[mqtt]"
 
 # With Parquet export
-.\\.venv\\Scripts\\python.exe -m pip install -e ".[parquet]"
+.\.venv\Scripts\python.exe -m pip install -e ".[parquet]"
 
 # With all optional dependencies
-.\\.venv\\Scripts\\python.exe -m pip install -e ".[dev,mqtt,parquet]"
+.\.venv\Scripts\python.exe -m pip install -e ".[dev,mqtt,parquet]"
 ```
 
-The demo launches the server, discovers 25+ tools, reads simulated Motor 3, runs analytics, creates alert rules, and demonstrates all advanced features. These are illustrative readings and thresholds, not operating specifications.
+The basic demo launches the server, discovers 36 tools and exercises simulated readings, statistics and maintenance drafts. Run `examples/v04_demo.py` for the four new tools using an isolated temporary database. These are illustrative readings and thresholds, not operating specifications.
 
 Start the server for an MCP host:
 
 ```powershell
-.\\.venv\\Scripts\\python.exe -m electrical_mcp.server
+.\.venv\Scripts\python.exe -m electrical_mcp.server
 ```
 
 It waits for MCP messages on stdin; it is not an interactive chat prompt or webpage. Diagnostic output goes to stderr. Stop with Ctrl+C.
@@ -97,7 +97,7 @@ The Python package must be installed in the specified environment. Parent direct
 Terminal 1:
 
 ```powershell
-.\\.venv\\Scripts\\python.exe examples\\http_gateway.py
+.\.venv\Scripts\python.exe examples\http_gateway.py
 ```
 
 Configure your MCP host with `examples/devices.json`, then call `read_measurements` with `{"device_id":"meter-1"}`. The local gateway returns simulated 3.2 kW with a simulation flag. Stop the gateway to see `get_device_status` return `unavailable`.
@@ -135,19 +135,19 @@ For live equipment, replace the configured endpoint with your operator-managed H
 
 | Tool | Purpose | Process role |
 |---|---|---|
-| `create_alert_rule` | Create configurable alert thresholds | Admin |
+| `create_alert_rule` | Create configurable alert thresholds | Maintenance/admin |
 | `list_alert_rules` | List alert rules with optional filtering | All |
 | `get_active_alerts` | Get currently active alerts | All |
 | `acknowledge_alert` | Acknowledge an active alert | Maintenance/admin |
 | `resolve_alert` | Resolve an active or acknowledged alert | Maintenance/admin |
-| `get_alert_statistics` | Get alert system statistics | Admin |
+| `get_alert_statistics` | Get alert system statistics | All |
 
 ### Device Group Tools
 
 | Tool | Purpose | Process role |
 |---|---|---|
-| `create_device_group` | Create a new device group | Admin |
-| `add_device_to_group` | Add a device to a group | Admin |
+| `create_device_group` | Create a new device group | Maintenance/admin |
+| `add_device_to_group` | Add a device to a group | Maintenance/admin |
 | `list_device_groups` | List device groups | All |
 | `get_device_groups` | Get groups containing a device | All |
 | `get_group_hierarchy` | Get complete device group hierarchy | All |
@@ -156,9 +156,9 @@ For live equipment, replace the configured endpoint with your operator-managed H
 
 | Tool | Purpose | Process role |
 |---|---|---|
-| `create_scheduled_task` | Create automated monitoring tasks | Admin |
+| `create_scheduled_task` | Create automated monitoring tasks | Maintenance/admin |
 | `list_scheduled_tasks` | List all scheduled tasks | All |
-| `run_task_now` | Immediately execute a task | Admin |
+| `run_task_now` | Immediately execute a task | Maintenance/admin |
 | `get_task_history` | Get task execution history | All |
 
 ### Data Export Tools
@@ -173,7 +173,30 @@ Prompt: `investigate_device(device_id)`.
 
 Reading tools are read-only with respect to devices, while storing local telemetry/audit records. Drafts never send emails, dispatch technicians, or modify an ERP.
 
-## New in v0.3: advanced features
+## New in v0.4: tools and reliability
+
+| Tool | Purpose | Role |
+|---|---|---|
+| `get_latest_measurements(device_id)` | Indexed stored samples, with freshness rechecked now; no gateway call | All |
+| `get_data_quality_report(device_id, start, end, limit)` | Collection-time quality, simulation and truncation counts | All |
+| `get_maintenance_request_draft(draft_id)` | Retrieve a single authorized local draft | Maintenance/admin |
+| `evaluate_device_alerts(device_id)` | Read and evaluate threshold rules, persist resulting alerts | Maintenance/admin |
+
+The quality report uses at most 500 newest samples and explicitly labels partial results; reason counts can overlap. Cached readings do not establish whether a device is online. Stored historical quality is distinct from freshness now.
+
+Optimizations include metric-history/latest-sample indexes, audit/draft listing indexes, a shared four-read gateway budget, and calculating forecast variance once per request. Analytics select the requested metric before limiting, use chronological samples, reject mixed simulated/live data, and cap forecasts at 100 sample positions. These forecasts are illustrative and not validated operational predictions.
+
+Persistence fixes cover company-scoped groups, alert rules/events and task definitions. Nested group traversal and asynchronous task execution are corrected. Advanced mutations require a maintenance/admin process role. Use one writer process per company database; snapshot-based manager persistence is not designed for simultaneous writers.
+
+Run the isolated new-tool demo:
+
+```powershell
+.\.venv\Scripts\python.exe examples\v04_demo.py
+```
+
+See [validation and benchmark results](docs/VALIDATION.md).
+
+## Advanced features
 
 ### Analytics and Forecasting
 
@@ -183,10 +206,10 @@ Reading tools are read-only with respect to devices, while storing local telemet
 
 ### Alerting System
 
-- Create configurable alert rules with conditions: above, below, equals, between, outside, rate_of_change.
+- Create configurable alert rules with conditions: above, below, equals, between and outside. Unsupported conditions are rejected.
 - Support for consecutive breach detection and cooldown periods.
 - Alert states: active, acknowledged, resolved, silenced.
-- Notification channels: webhook, Slack integration.
+- `evaluate_device_alerts` reads and evaluates on demand; no notifications are sent. Rules and the latest 1,000 alert records reload on startup.
 
 ### Device Grouping
 
@@ -196,13 +219,13 @@ Reading tools are read-only with respect to devices, while storing local telemet
 
 ### Scheduled Tasks
 
-- Automated device reading, fleet checks, threshold monitoring.
-- Configurable intervals or cron-like scheduling.
-- Task execution history and status tracking.
+- Supported manual executions: device reading, fleet checks and threshold comparisons.
+- Intervals of 1..86400 seconds; cron is rejected rather than silently using an incorrect schedule. The MCP entry point does not start the scheduler loop.
+- Task definitions and last-run status persist. Detailed execution history is limited to 100 per task in memory and resets on restart.
 
 ### Data Export
 
-- Export to JSON, CSV, Parquet, and Excel formats.
+- MCP export supports JSON and CSV. Other module formats need optional dependencies and are not exposed by these tools.
 - Summary report generation with statistics.
 - Flexible time range and filtering options.
 

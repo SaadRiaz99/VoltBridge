@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voltbridge-mcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "Advanced electrical telemetry and maintenance MCP server with real-time monitoring, analytics, and alerting"
 requires-python = ">=3.11"
 dependencies = [

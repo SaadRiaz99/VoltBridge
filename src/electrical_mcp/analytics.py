@@ -197,10 +197,10 @@ class TelemetryAnalytics:
         intercept = y_mean - slope * x_mean
 
         forecast = []
+        std_val = stdev(values) if len(values) > 1 else 0.0
         for i in range(1, periods + 1):
             predicted = slope * (n + i - 1) + intercept
             # Add confidence interval based on historical variance
-            std_val = stdev(values) if len(values) > 1 else 0
             margin = 1.96 * std_val * math.sqrt(1 + i / n)
 
             forecast.append({

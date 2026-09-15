@@ -1,6 +1,6 @@
 """VoltBridge MCP - Advanced electrical telemetry and maintenance server."""
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 from .analytics import TelemetryAnalytics, analyze_device_history
 from .alerts import AlertManager, AlertRule, AlertSeverity, AlertCondition

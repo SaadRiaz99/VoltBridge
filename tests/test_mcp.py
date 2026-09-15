@@ -16,7 +16,7 @@ async def test_stdio_workflow(tmp_path):
         async with ClientSession(reader, writer) as session:
             await session.initialize()
             tools = {tool.name for tool in (await session.list_tools()).tools}
-            assert len(tools) == 32  # Updated for v0.3 with advanced features
+            assert len(tools) == 36  # v0.4 adds stored-data and explicit alert-evaluation tools
             result = await session.call_tool('read_measurements', {'device_id': 'motor-3'})
             assert not result.isError
             reading = json.loads(result.content[0].text)
@@ -50,6 +50,29 @@ async def test_stdio_workflow(tmp_path):
                 'first_device_id': 'motor-3', 'second_device_id': 'motor-4', 'metric': 'power'})
             assert not compared.isError
             assert json.loads(compared.content[0].text)['difference_first_minus_second'] == 0
+
+            cached = await session.call_tool('get_latest_measurements', {'device_id':'motor-3'})
+            assert not cached.isError
+            assert json.loads(cached.content[0].text)['gateway_contacted'] is False
+            quality = await session.call_tool('get_data_quality_report', {
+                'device_id':'motor-3','start':'2020-01-01T00:00:00Z','end':'2100-01-01T00:00:00Z'})
+            assert not quality.isError
+            assert json.loads(quality.content[0].text)['sample_count'] > 0
+            retrieved = await session.call_tool('get_maintenance_request_draft', {
+                'draft_id':json.loads(first.content[0].text)['id']})
+            assert not retrieved.isError
+            rule = await session.call_tool('create_alert_rule', {
+                'rule_id':'hot','name':'Hot','metric':'temperature','condition':'above','threshold_value':45})
+            assert not rule.isError
+            evaluated = await session.call_tool('evaluate_device_alerts', {'device_id':'motor-3'})
+            assert not evaluated.isError
+            assert len(json.loads(evaluated.content[0].text)['alerts']) == 1
+            created = await session.call_tool('create_scheduled_task', {'task_id':'read','name':'Read',
+                'task_type':'device_read','interval_seconds':60,'config':{'device_id':'motor-3'}})
+            assert not created.isError
+            execution = await session.call_tool('run_task_now', {'task_id':'read'})
+            assert not execution.isError
+            assert json.loads(execution.content[0].text)['status'] == 'completed'
 
 
 async def test_advanced_analytics(tmp_path):
@@ -203,3 +226,41 @@ async def test_data_export(tmp_path):
                 'device_id': 'motor-3', 'hours': 24
             })
             assert not result.isError
+
+
+async def test_viewer_cannot_mutate_and_forecast_uses_chronological_history(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from electrical_mcp.store import Store
+    database = str(tmp_path/'viewer.db')
+    store = Store(database)
+    now = datetime.now(timezone.utc)
+    store.save_readings('viewer-company', 'motor-3', [
+        {'metric':'power','value':value,'unit':'kW','usable':True,'quality':'good',
+         'timestamp':(now-timedelta(seconds=10-i)).isoformat(), 'simulated':False}
+        for i, value in enumerate([2,4,6])])
+    config = tmp_path/'viewer.json'
+    config.write_text(json.dumps({'devices':[{'id':'motor-3','name':'Motor'}]}))
+    params = StdioServerParameters(command=sys.executable,args=['-m','electrical_mcp.server'],env={
+        **os.environ,'EEMCP_DB':database,'EEMCP_CONFIG':str(config),
+        'EEMCP_ROLE':'viewer','EEMCP_COMPANY':'viewer-company'})
+    async with stdio_client(params) as (reader, writer):
+        async with ClientSession(reader, writer) as session:
+            await session.initialize()
+            mutations = [
+                ('create_device_group',{'group_id':'g','name':'Group'}),
+                ('add_device_to_group',{'group_id':'g','device_id':'motor-3'}),
+                ('create_alert_rule',{'rule_id':'r','name':'R','metric':'power','condition':'above','threshold_value':2}),
+                ('acknowledge_alert',{'alert_id':'a','acknowledged_by':'user'}),
+                ('resolve_alert',{'alert_id':'a'}),
+                ('create_scheduled_task',{'task_id':'t','name':'Task','task_type':'device_read','interval_seconds':60}),
+                ('run_task_now',{'task_id':'t'}),
+                ('evaluate_device_alerts',{'device_id':'motor-3'})]
+            for name, args in mutations:
+                assert (await session.call_tool(name,args)).isError, name
+            forecast = await session.call_tool('forecast_telemetry',{'device_id':'motor-3','metric':'power','periods':1})
+            assert not forecast.isError
+            data = json.loads(forecast.content[0].text)
+            assert data['forecast']['forecast'][0]['predicted_value'] == 8
+            assert data['simulated'] is False
+            assert (await session.call_tool('forecast_telemetry',{
+                'device_id':'motor-3','metric':'power','periods':100001})).isError

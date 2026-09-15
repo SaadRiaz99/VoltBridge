@@ -2,7 +2,7 @@
 import json
 from datetime import datetime, timezone
 from typing import Any
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from collections import defaultdict
 
 
@@ -28,45 +28,24 @@ class DeviceHierarchy:
 class DeviceGroupManager:
     """Manages device groups and hierarchy."""
 
-    def __init__(self, store=None):
+    def __init__(self, store=None, company_id="demo-factory"):
         self._hierarchy = DeviceHierarchy()
         self._store = store
+        self._company_id = company_id
         self._load_from_store()
 
     def _load_from_store(self) -> None:
-        """Load groups from store if available."""
         if self._store:
-            try:
-                data = self._store.get_device_groups()
-                for group_data in data:
-                    group = DeviceGroup(**group_data)
-                    self._hierarchy.groups[group.group_id] = group
-                    for device_id in group.device_ids:
-                        if device_id not in self._hierarchy.device_to_groups:
-                            self._hierarchy.device_to_groups[device_id] = []
-                        self._hierarchy.device_to_groups[device_id].append(group.group_id)
-            except Exception:
-                pass
+            for data in self._store.get_device_groups(self._company_id):
+                group = DeviceGroup(**data)
+                self._hierarchy.groups[group.group_id] = group
+                for device_id in group.device_ids:
+                    self._hierarchy.device_to_groups.setdefault(device_id, []).append(group.group_id)
 
     def _save_to_store(self) -> None:
-        """Save groups to store if available."""
         if self._store:
-            try:
-                data = [
-                    {
-                        "group_id": g.group_id,
-                        "name": g.name,
-                        "description": g.description,
-                        "parent_group_id": g.parent_group_id,
-                        "device_ids": g.device_ids,
-                        "metadata": g.metadata,
-                        "created_at": g.created_at,
-                    }
-                    for g in self._hierarchy.groups.values()
-                ]
-                self._store.save_device_groups(data)
-            except Exception:
-                pass
+            self._store.save_device_groups(self._company_id,
+                [asdict(g) for g in self._hierarchy.groups.values()])
 
     def create_group(self, group_id: str, name: str, description: str = "",
                      parent_group_id: str | None = None, metadata: dict[str, Any] | None = None) -> DeviceGroup:
@@ -203,7 +182,7 @@ class DeviceGroupManager:
             "device_count": len(group.device_ids),
             "device_ids": group.device_ids,
             "metadata": group.metadata,
-            "children": [self.get_child_tree(c.group_id, depth + 1) for c in children],
+            "children": [self.get_group_tree(c.group_id, depth + 1) for c in children],
         }
 
     def get_group_statistics(self, group_id: str) -> dict[str, Any]:

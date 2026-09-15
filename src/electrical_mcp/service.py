@@ -8,6 +8,7 @@ from .store import Store
 
 class Operations:
     def __init__(self, settings: Settings, connectors=None):
+        self._gateway_slots = asyncio.Semaphore(4)
         self.settings = settings
         self.devices = {d.id: d for d in settings.devices}
         self.store = Store(settings.database)
@@ -42,7 +43,8 @@ class Operations:
     async def read(self, device_id):
         device = self.device(device_id)
         try:
-            readings = await self.connectors[device.connector].read(device)
+            async with self._gateway_slots:
+                readings = await self.connectors[device.connector].read(device)
         except DeviceUnavailable:
             self.record("read_measurements", device_id, "failed")
             raise
@@ -117,11 +119,9 @@ class Operations:
         if not 1 <= limit <= 50:
             raise ValueError("Limit must be 1..50")
         selected = sorted(self.devices)[:limit]
-        semaphore = asyncio.Semaphore(4)
 
         async def check(device_id):
-            async with semaphore:
-                return await self.status(device_id)
+            return await self.status(device_id)
 
         devices = await asyncio.gather(*(check(device_id) for device_id in selected))
         self.record("get_fleet_health")
@@ -193,3 +193,50 @@ class Operations:
                 "comparable": comparable, "reason": reason, "timestamp_skew_seconds": skew,
                 "difference_first_minus_second": difference,
                 "note": "Difference only; equipment suitability and operating limits require engineering context"}
+
+    def latest_measurements(self, device_id):
+        device = self.device(device_id)
+        rows = self.store.latest_readings(self.settings.company_id, device_id, UNITS)
+        now = datetime.now(timezone.utc)
+        for row in rows:
+            age = (now - datetime.fromisoformat(row["timestamp"].replace("Z", "+00:00"))).total_seconds()
+            row["usable_at_collection"] = bool(row.get("usable", False))
+            row["age_seconds"] = age
+            row["stale"] = age > device.stale_after_seconds
+            row["future_timestamp"] = age < -5
+            row["usable"] = (row["usable_at_collection"] and not row["stale"]
+                             and not row["future_timestamp"] and row.get("quality") == "good")
+        self.record("get_latest_measurements", device_id)
+        return {"device_id": device_id, "source": "stored_history", "gateway_contacted": False,
+                "readings": rows, "note": "Latest stored sample per metric, not a live device-status check"}
+
+    def data_quality_report(self, device_id, start, end, limit=500):
+        self.device(device_id)
+        dates = [datetime.fromisoformat(t.replace("Z", "+00:00")) for t in (start, end)]
+        if any(d.tzinfo is None for d in dates) or dates[0] > dates[1] or not 1 <= limit <= 500:
+            raise ValueError("Use timezone-aware ordered dates and limit 1..500")
+        rows = self.store.history(self.settings.company_id, device_id,
+            *(d.astimezone(timezone.utc).isoformat() for d in dates), limit + 1)
+        samples = rows[:limit]
+        usable = sum(bool(r.get("usable", False)) for r in samples)
+        self.record("get_data_quality_report", device_id)
+        return {"device_id": device_id, "sample_count": len(samples), "usable_count": usable,
+                "unusable_count": len(samples) - usable, "truncated": len(rows) > limit,
+                "usable_percent": round(100 * usable / len(samples), 2) if samples else None,
+                "quality_counts": {q: sum(r.get("quality", "unknown") == q for r in samples)
+                                   for q in ("good", "uncertain", "bad", "unknown")},
+                "stale_count": sum(bool(r.get("stale")) for r in samples),
+                "future_timestamp_count": sum(bool(r.get("future_timestamp")) for r in samples),
+                "simulated_count": sum(bool(r.get("simulated")) for r in samples),
+                "note": "Newest stored samples; quality at collection time. Reason counts may overlap."}
+
+    def maintenance_draft(self, draft_id):
+        self.require({"maintenance", "admin"}, "get_maintenance_request_draft")
+        if not isinstance(draft_id, str) or not 1 <= len(draft_id) <= 100:
+            raise ValueError("Invalid draft ID")
+        draft = self.store.get_draft(self.settings.company_id, draft_id)
+        if draft is None:
+            raise ValueError("Unknown or inaccessible draft")
+        self.device(draft["device"])
+        self.record("get_maintenance_request_draft", draft["device"])
+        return draft

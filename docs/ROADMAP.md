@@ -23,3 +23,7 @@ Add authenticated remote MCP transport with scoped identities, per-user permissi
 Choose Modbus, MQTT or OPC UA based on actual customer hardware. Add connectors only after mapping and emulator/hardware tests. Add usage metering, customer billing and deployment automation once pilot economics are understood.
 
 Machine control is a separate engineering scope. It requires command allowlists, independent approval and physical/device safety controls; the current server exposes no machine command tools.
+
+## Delivered in v0.4
+
+36 tools, including stored latest readings, quality reports, draft lookup and explicit alert evaluation. Query indexes, a shared gateway budget, company-scoped manager persistence and regression tests strengthen the existing v0.3 work. See VALIDATION.md for measured scope. Remaining work includes scheduler lifecycle integration, multi-process transactional persistence, hardware/broker validation and authenticated remote deployment.

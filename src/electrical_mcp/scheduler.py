@@ -2,7 +2,7 @@
 import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import Any, Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 import json
 
@@ -58,9 +58,10 @@ class TaskExecution:
 class TaskScheduler:
     """Manages scheduled tasks for automated monitoring."""
 
-    def __init__(self, operations, store=None):
+    def __init__(self, operations, store=None, company_id="demo-factory"):
         self.operations = operations
         self._store = store
+        self._company_id = company_id
         self._tasks: dict[str, ScheduledTask] = {}
         self._executions: dict[str, list[TaskExecution]] = {}
         self._running_tasks: dict[str, asyncio.Task] = {}
@@ -70,40 +71,18 @@ class TaskScheduler:
         self._load_from_store()
 
     def _load_from_store(self) -> None:
-        """Load tasks from store."""
         if self._store:
-            try:
-                data = self._store.get_scheduled_tasks()
-                for task_data in data:
-                    task = ScheduledTask(**task_data)
-                    self._tasks[task.task_id] = task
-            except Exception:
-                pass
+            for data in self._store.get_scheduled_tasks(self._company_id):
+                data["task_type"] = TaskType(data["task_type"])
+                data["last_status"] = TaskStatus(data["last_status"])
+                task = ScheduledTask(**data)
+                self._tasks[task.task_id] = task
 
     def _save_to_store(self) -> None:
-        """Save tasks to store."""
         if self._store:
-            try:
-                data = [
-                    {
-                        "task_id": t.task_id,
-                        "name": t.name,
-                        "task_type": t.task_type.value,
-                        "schedule_cron": t.schedule_cron,
-                        "interval_seconds": t.interval_seconds,
-                        "enabled": t.enabled,
-                        "config": t.config,
-                        "last_run": t.last_run,
-                        "next_run": t.next_run,
-                        "run_count": t.run_count,
-                        "last_status": t.last_status.value,
-                        "created_at": t.created_at,
-                    }
-                    for t in self._tasks.values()
-                ]
-                self._store.save_scheduled_tasks(data)
-            except Exception:
-                pass
+            data = [{**asdict(t), "task_type": t.task_type.value,
+                     "last_status": t.last_status.value} for t in self._tasks.values()]
+            self._store.save_scheduled_tasks(self._company_id, data)
 
     def create_task(self, task_id: str, name: str, task_type: TaskType,
                     schedule_cron: str | None = None, interval_seconds: int | None = None,
@@ -112,6 +91,12 @@ class TaskScheduler:
         if task_id in self._tasks:
             raise ValueError(f"Task {task_id} already exists")
 
+        if schedule_cron:
+            raise ValueError("Cron schedules are not implemented; use interval_seconds")
+        if interval_seconds is not None and not 1 <= interval_seconds <= 86400:
+            raise ValueError("interval_seconds must be 1..86400")
+        if task_type not in {TaskType.DEVICE_READ, TaskType.FLEET_CHECK, TaskType.THRESHOLD_CHECK}:
+            raise ValueError("Supported tasks: device_read, fleet_check, threshold_check")
         if not schedule_cron and not interval_seconds:
             raise ValueError("Either schedule_cron or interval_seconds must be provided")
 
@@ -189,6 +174,8 @@ class TaskScheduler:
     def get_task_history(self, task_id: str, limit: int = 50) -> list[TaskExecution]:
         """Get execution history for a task."""
         executions = self._executions.get(task_id, [])
+        if not 1 <= limit <= 100:
+            raise ValueError("limit must be 1..100")
         return executions[-limit:]
 
     def register_callback(self, task_type: TaskType, callback: Callable) -> None:
@@ -198,7 +185,9 @@ class TaskScheduler:
     def _calculate_next_run(self, cron: str | None, interval: int | None) -> str:
         """Calculate next run time."""
         now = datetime.now(timezone.utc)
-        if interval:
+        if cron:
+            raise ValueError("Cron schedules are not implemented")
+        if interval and 1 <= interval <= 86400:
             return (now + timedelta(seconds=interval)).isoformat()
         # Simple cron parsing (would need a proper cron library for full support)
         return (now + timedelta(minutes=1)).isoformat()
@@ -255,7 +244,7 @@ class TaskScheduler:
             metric = task.config.get("metric")
             maximum = task.config.get("maximum")
             unit = task.config.get("unit")
-            if not all([device_id, metric, maximum, unit]):
+            if not device_id or not metric or maximum is None or not unit:
                 raise ValueError("device_id, metric, maximum, and unit required")
             return await self.operations.threshold(device_id, metric, maximum, unit)
 
@@ -277,7 +266,7 @@ class TaskScheduler:
             return {"analytics": f"Analyzed {metric} for {device_id}", "samples": len(history)}
 
         else:
-            return {"status": "task_type_not_implemented"}
+            raise ValueError("Task type is not implemented")
 
     async def _scheduler_loop(self) -> None:
         """Main scheduler loop that checks and runs due tasks."""

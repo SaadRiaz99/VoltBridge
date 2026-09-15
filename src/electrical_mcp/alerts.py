@@ -1,9 +1,11 @@
 """Advanced alerting system with configurable thresholds and notifications."""
 import asyncio
+import math
+import uuid
 import json
 from datetime import datetime, timezone, timedelta
 from typing import Any, Callable
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from collections import defaultdict
 
@@ -85,7 +87,7 @@ class NotificationChannel:
 class AlertManager:
     """Manages alert rules, evaluates conditions, and handles notifications."""
 
-    def __init__(self, store=None):
+    def __init__(self, store=None, company_id="demo-factory"):
         self._rules: dict[str, AlertRule] = {}
         self._active_alerts: dict[str, Alert] = {}
         self._alert_history: list[Alert] = []
@@ -93,16 +95,62 @@ class AlertManager:
         self._breach_counts: dict[str, int] = defaultdict(int)
         self._last_alert_time: dict[str, datetime] = {}
         self._store = store
+        self._company_id = company_id
         self._evaluation_callbacks: list[Callable] = []
         self._max_history = 1000
+        if self._store:
+            for data in self._store.get_alert_rules(self._company_id):
+                data["condition"] = AlertCondition(data["condition"])
+                data["severity"] = AlertSeverity(data["severity"])
+                rule = AlertRule(**data)
+                self._rules[rule.rule_id] = rule
+            for data in reversed(self._store.get_alerts(self._company_id, limit=self._max_history)):
+                data["state"] = AlertState(data["state"])
+                data["severity"] = AlertSeverity(data["severity"])
+                for key in ("triggered_at", "acknowledged_at", "resolved_at"):
+                    data[key] = datetime.fromisoformat(data[key]) if data[key] else None
+                alert = Alert(**data)
+                self._alert_history.append(alert)
+                self._last_alert_time[(alert.rule_id, alert.device_id)] = alert.triggered_at
+                if alert.state != AlertState.RESOLVED:
+                    self._active_alerts[alert.alert_id] = alert
+
+    def _save_rules(self):
+        if self._store:
+            self._store.save_alert_rules(self._company_id,
+                [{**asdict(r), "condition": r.condition.value, "severity": r.severity.value}
+                 for r in self._rules.values()])
+
+    def _save_alert(self, alert):
+        if self._store:
+            data = {**asdict(alert), "state": alert.state.value, "severity": alert.severity.value}
+            for key in ("triggered_at", "acknowledged_at", "resolved_at"):
+                data[key] = data[key].isoformat() if data[key] else None
+            self._store.save_alert(self._company_id, data)
 
     def add_rule(self, rule: AlertRule) -> None:
         """Add or update an alert rule."""
+        from .models import UNITS
+        if rule.metric not in UNITS or rule.condition not in {
+                AlertCondition.ABOVE, AlertCondition.BELOW, AlertCondition.EQUALS,
+                AlertCondition.BETWEEN, AlertCondition.OUTSIDE}:
+            raise ValueError("Use a supported metric and threshold condition")
+        if rule.threshold_value is None or not math.isfinite(rule.threshold_value):
+            raise ValueError("A finite threshold is required")
+        if rule.condition in {AlertCondition.BETWEEN, AlertCondition.OUTSIDE}:
+            if (rule.threshold_value_upper is None or not math.isfinite(rule.threshold_value_upper)
+                    or rule.threshold_value_upper < rule.threshold_value):
+                raise ValueError("Provide ordered finite lower and upper thresholds")
+        if not 0 <= rule.cooldown_seconds <= 86400 or rule.consecutive_breaches < 1:
+            raise ValueError("Invalid cooldown or breach count")
         self._rules[rule.rule_id] = rule
+        self._save_rules()
 
     def remove_rule(self, rule_id: str) -> bool:
         """Remove an alert rule."""
-        return self._rules.pop(rule_id, None) is not None
+        removed = self._rules.pop(rule_id, None) is not None
+        self._save_rules()
+        return removed
 
     def get_rule(self, rule_id: str) -> AlertRule | None:
         """Get an alert rule by ID."""
@@ -138,7 +186,7 @@ class AlertManager:
 
             # Find the relevant reading
             reading = next((r for r in readings if r.get("metric") == rule.metric), None)
-            if reading is None:
+            if reading is None or not reading.get("usable", False):
                 continue
 
             current_value = reading.get("value")
@@ -146,7 +194,8 @@ class AlertManager:
                 continue
 
             # Check cooldown
-            last_time = self._last_alert_time.get(rule.rule_id)
+            rule_key = (rule.rule_id, device_id)
+            last_time = self._last_alert_time.get(rule_key)
             if last_time and (now - last_time).total_seconds() < rule.cooldown_seconds:
                 continue
 
@@ -154,20 +203,23 @@ class AlertManager:
             breached = self._evaluate_condition(rule, current_value)
 
             if breached:
-                self._breach_counts[rule.rule_id] += 1
-                if self._breach_counts[rule.rule_id] >= rule.consecutive_breaches:
+                self._breach_counts[rule_key] += 1
+                if self._breach_counts[rule_key] >= rule.consecutive_breaches:
                     alert = self._create_alert(rule, device_id, current_value, now)
+                    alert.metadata.update({"simulated": bool(reading.get("simulated")),
+                                           "timestamp": reading.get("timestamp"), "unit": reading.get("unit")})
+                    self._save_alert(alert)
                     new_alerts.append(alert)
                     self._active_alerts[alert.alert_id] = alert
                     self._alert_history.append(alert)
-                    self._last_alert_time[rule.rule_id] = now
-                    self._breach_counts[rule.rule_id] = 0
+                    self._last_alert_time[rule_key] = now
+                    self._breach_counts[rule_key] = 0
 
                     # Trim history if needed
                     if len(self._alert_history) > self._max_history:
                         self._alert_history = self._alert_history[-self._max_history:]
             else:
-                self._breach_counts[rule.rule_id] = 0
+                self._breach_counts[rule_key] = 0
 
         return new_alerts
 
@@ -181,7 +233,7 @@ class AlertManager:
             return rule.threshold_value is not None and abs(value - rule.threshold_value) < 1e-6
         elif rule.condition == AlertCondition.BETWEEN:
             if rule.threshold_value is not None and rule.threshold_value_upper is not None:
-                return not (rule.threshold_value <= value <= rule.threshold_value_upper)
+                return rule.threshold_value <= value <= rule.threshold_value_upper
         elif rule.condition == AlertCondition.OUTSIDE:
             if rule.threshold_value is not None and rule.threshold_value_upper is not None:
                 return value < rule.threshold_value or value > rule.threshold_value_upper
@@ -192,7 +244,7 @@ class AlertManager:
 
     def _create_alert(self, rule: AlertRule, device_id: str, current_value: float, timestamp: datetime) -> Alert:
         """Create a new alert from a rule breach."""
-        alert_id = f"alert-{rule.rule_id}-{timestamp.timestamp()}"
+        alert_id = f"alert-{uuid.uuid4()}"
 
         message = f"{rule.name}: {rule.metric} is {current_value}"
         if rule.threshold_value is not None:
@@ -220,6 +272,7 @@ class AlertManager:
             alert.state = AlertState.ACKNOWLEDGED
             alert.acknowledged_at = datetime.now(timezone.utc)
             alert.acknowledged_by = acknowledged_by
+            self._save_alert(alert)
             return True
         return False
 
@@ -229,6 +282,7 @@ class AlertManager:
             alert = self._active_alerts[alert_id]
             alert.state = AlertState.RESOLVED
             alert.resolved_at = datetime.now(timezone.utc)
+            self._save_alert(alert)
             del self._active_alerts[alert_id]
             return True
         return False
